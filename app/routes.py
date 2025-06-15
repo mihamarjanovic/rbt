@@ -54,20 +54,28 @@ def search_properties():
     if state:
         query = query.join(CityPart).join(City).join(State).filter(State.name.ilike(state))
 
-    properties = query.all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    properties = pagination.items
 
-    return [{
-        'id': building.id,
-        'square_footage': float(building.square_footage) if building.square_footage is not None else None,
-        'construction_year': building.construction_year,
-        'price': building.price,
-        'rooms': float(building.rooms) if building.rooms is not None else None,
-        'bathrooms': building.bathrooms,
-        'parking': building.parking,
-        'estate_type': building.estate_type.name,
-        'offer': building.offer.name,
-        'city_part': building.city_part.name if building.city_part else None
-    } for building in properties]
+    return {
+        'properties': [{
+            'id': building.id,
+            'square_footage': float(building.square_footage) if building.square_footage is not None else None,
+            'construction_year': building.construction_year,
+            'price': building.price,
+            'rooms': float(building.rooms) if building.rooms is not None else None,
+            'bathrooms': building.bathrooms,
+            'parking': building.parking,
+            'estate_type': building.estate_type.name,
+            'offer': building.offer.name,
+            'city_part': building.city_part.name if building.city_part else None
+        } for building in properties],
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': page
+    }
 
 @bp.route('/properties', methods=['POST'])
 def add_property():
