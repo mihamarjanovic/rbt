@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - SQLALCHEMY_DATABASE_URI=postgresql://real_estate_user:real_estate_password@db:5432/real_estate
+      - JWT_SECRET_KEY=mihajlo_marjanovic
+    depends_on:
+      - db
+    volumes:
+      - ./staging:/app/staging
+      - ./processed:/app/processed
+      - ./errored:/app/errored
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=real_estate_user
+      - POSTGRES_PASSWORD=real_estate_password
+      - POSTGRES_DB=real_estate
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
