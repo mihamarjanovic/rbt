@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, create_access_token
 from . import db
-from .models import Building, EstateType, CityPart, City, State
+from .models import Building, EstateType, CityPart, City, State, Offer, User
 from sqlalchemy.exc import IntegrityError
 
 bp = Blueprint('api', __name__)
@@ -14,15 +15,28 @@ def test_db():
     count = db.session.query(Building).count()
     return f'Total buildings: {count}'
 
+@bp.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Missing username or password'}), 400
+
+    user = User.query.filter_by(username=data['username']).first()
+    if not user or not user.check_password(data['password']):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    access_token = create_access_token(identity=str(user.id))
+    return jsonify({'access_token': access_token}), 200
+
 @bp.route('/properties/<int:id>')
 def get_property(id):
     building = Building.query.get_or_404(id)
     return {
         'id': building.id,
-        'square_footage': float(building.square_footage) if building.square_footage is not None else None,
+        'square_footage': float(building.square_footage) if building.square_footage else None,
         'construction_year': building.construction_year,
         'price': building.price,
-        'rooms': float(building.rooms) if building.rooms is not None else None,
+        'rooms': float(building.rooms) if building.rooms else None,
         'bathrooms': building.bathrooms,
         'parking': building.parking,
         'estate_type': building.estate_type.name,
@@ -62,10 +76,10 @@ def search_properties():
     return {
         'properties': [{
             'id': building.id,
-            'square_footage': float(building.square_footage) if building.square_footage is not None else None,
+            'square_footage': float(building.square_footage) if building.square_footage else None,
             'construction_year': building.construction_year,
             'price': building.price,
-            'rooms': float(building.rooms) if building.rooms is not None else None,
+            'rooms': float(building.rooms) if building.rooms else None,
             'bathrooms': building.bathrooms,
             'parking': building.parking,
             'estate_type': building.estate_type.name,
@@ -78,14 +92,15 @@ def search_properties():
     }
 
 @bp.route('/properties', methods=['POST'])
+@jwt_required()
 def add_property():
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
     required_fields = ['square_footage', 'construction_year', 'land_area', 'registration', 
-                      'rooms', 'bathrooms', 'parking', 'price', 'estate_type_id', 
-                      'offer_id', 'city_part_id']
+                       'rooms', 'bathrooms', 'parking', 'price', 'estate_type_id', 
+                       'offer_id', 'city_part_id']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
@@ -121,12 +136,13 @@ def add_property():
         }), 201
     except IntegrityError:
         db.session.rollback()
-        return jsonify({'error': 'Invalid foreign key (e.g., estate_type_id, offer_id, city_part_id)'}), 400
+        return jsonify({'error': 'Invalid foreign key'}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/properties/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_property(id):
     building = Building.query.get_or_404(id)
     data = request.get_json()
@@ -174,7 +190,7 @@ def update_property(id):
         }), 200
     except IntegrityError:
         db.session.rollback()
-        return jsonify({'error': 'Invalid foreign key (e.g., estate_type_id, offer_id, city_part_id)'}), 400
+        return jsonify({'error': 'Invalid foreign key'}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
